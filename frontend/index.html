@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bindery — notes in, books out</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='18' y='10' width='64' height='80' rx='6' fill='%23A8551F'/><rect x='18' y='10' width='12' height='80' fill='%23823F16'/></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="desk">
+  <div class="book">
+    <div class="spine" aria-hidden="true">
+      <span class="spine-band spine-band-top"></span>
+      <span class="spine-text">BINDERY</span>
+      <span class="spine-band spine-band-bottom"></span>
+    </div>
+
+    <main class="pages">
+      <div class="pagehead">
+        <p class="mono pagehead-note">A local press for your notes</p>
+        <div class="pagehead-controls">
+          <button id="theme-toggle" class="iconbtn" type="button" aria-label="Switch theme">
+            <svg class="icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5 5l2.1 2.1M16.9 16.9L19 19M19 5l-2.1 2.1M7.1 16.9L5 19"/></svg>
+            <svg class="icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
+          </button>
+          <button id="settings-open" class="iconbtn" type="button" aria-label="Open settings">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4.5"/><path d="M11.2 11.8 20.5 2.5M15.5 7.5l3 3M18 5l3 3"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="error-slip" class="slip" hidden role="alert">
+        <span class="slip-mark mono">!</span>
+        <span id="error-text"></span>
+        <button id="error-dismiss" class="slip-close" type="button" aria-label="Dismiss">×</button>
+      </div>
+
+      <!-- № 1 · upload -->
+      <section id="panel-upload" class="panel">
+        <p class="eyebrow mono">№ 1 · Manuscript</p>
+        <h1 class="paneltitle">Choose a document</h1>
+        <label class="dropwell" id="dropwell">
+          <svg class="dropwell-thread" aria-hidden="true" preserveAspectRatio="none"><rect x="1.5" y="1.5" rx="14"/></svg>
+          <input type="file" id="file-input" accept=".pdf,.docx,.txt,.md,.markdown,.html,.htm">
+          <div class="dropwell-idle">
+            <svg class="dropwell-glyph" width="44" height="44" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M24 10c-4-3-10-3-14-1v28c4-2 10-2 14 1 4-3 10-3 14-1V9c-4-2-10-2-14 1z"/>
+              <path d="M24 10v28"/>
+            </svg>
+            <p class="dropwell-lead">Drop a file here, or <span class="linkish">browse</span></p>
+            <p class="mono dropwell-formats">PDF&ensp;·&ensp;DOCX&ensp;·&ensp;TXT&ensp;·&ensp;MD&ensp;·&ensp;HTML</p>
+          </div>
+          <div class="dropwell-busy" hidden>
+            <div class="needle" aria-hidden="true"></div>
+            <p class="dropwell-lead">Reading <span id="reading-name" class="mono"></span>…</p>
+          </div>
+        </label>
+
+        <div class="pastewell">
+          <p class="mono pastewell-hint">…or paste Markdown straight from a chat — no PDF detour needed</p>
+          <textarea id="md-paste" rows="6" spellcheck="false"
+            placeholder="# My course&#10;&#10;Paste the Markdown here and press Use this text."></textarea>
+          <div class="actionrow">
+            <button id="md-paste-btn" class="btn btn-primary" type="button" disabled>Use this text</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- № 2 · options -->
+      <section id="panel-options" class="panel" hidden>
+        <p class="eyebrow mono">№ 2 · Typesetting</p>
+        <h1 class="paneltitle">Set up the book</h1>
+
+        <div class="filechip">
+          <span class="mono" id="file-facts"></span>
+          <button id="file-replace" class="ghostlink" type="button">replace</button>
+        </div>
+
+        <div class="formgrid">
+          <label class="field field-wide">
+            <span class="fieldlabel">Title</span>
+            <input id="meta-title" type="text" autocomplete="off">
+          </label>
+          <label class="field">
+            <span class="fieldlabel">Author</span>
+            <input id="meta-author" type="text" autocomplete="off" placeholder="optional">
+          </label>
+          <label class="field field-narrow">
+            <span class="fieldlabel">Language</span>
+            <input id="meta-lang" type="text" value="en" maxlength="5">
+          </label>
+        </div>
+
+        <div class="optrow">
+          <div class="optgroup">
+            <span class="fieldlabel">Body text</span>
+            <div class="segmented" role="radiogroup" aria-label="Text alignment">
+              <button type="button" class="seg selected" data-group="align" data-value="justify">Justified</button>
+              <button type="button" class="seg" data-group="align" data-value="left">Left-aligned</button>
+            </div>
+          </div>
+          <div class="optgroup">
+            <span class="fieldlabel">Paragraphs</span>
+            <div class="segmented" role="radiogroup" aria-label="Paragraph style">
+              <button type="button" class="seg selected" data-group="para" data-value="indent">Indented</button>
+              <button type="button" class="seg" data-group="para" data-value="spaced">Spaced</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="aicard">
+          <div class="aicard-head">
+            <label class="switch">
+              <input type="checkbox" id="ai-toggle">
+              <span class="switch-track" aria-hidden="true"></span>
+              <span class="switch-label">Tidy up with AI first</span>
+            </label>
+          </div>
+          <p class="aicard-note">Rebuilds broken paragraphs and headings without changing your
+            words — useful for messy PDF extractions. Runs only when you start it, with your own
+            API key, and you review the result before anything is bound.</p>
+          <div class="aicard-config" id="ai-config" hidden>
+            <div class="segmented" role="radiogroup" aria-label="AI provider">
+              <button type="button" class="seg selected" data-group="provider" data-value="google">Gemini</button>
+              <button type="button" class="seg" data-group="provider" data-value="anthropic">Claude</button>
+              <button type="button" class="seg" data-group="provider" data-value="openai">OpenAI</button>
+            </div>
+            <label class="field field-model">
+              <span class="fieldlabel">Model</span>
+              <select id="ai-model"></select>
+            </label>
+            <p class="keyhint mono" id="key-hint" hidden>No key saved for this provider —
+              <button class="ghostlink" id="key-hint-open" type="button">add one in Settings</button></p>
+          </div>
+        </div>
+
+        <div class="actionrow">
+          <button id="bind-btn" class="btn btn-primary" type="button">Bind book</button>
+        </div>
+      </section>
+
+      <!-- № 3 · working -->
+      <section id="panel-working" class="panel" hidden>
+        <p class="eyebrow mono">№ 3 · At the bench</p>
+        <h1 class="paneltitle">Binding…</h1>
+        <ol class="stitches" aria-live="polite">
+          <li class="stitch" data-stage="extract"><span class="stitch-dot"></span>Extract text</li>
+          <li class="stitch" data-stage="ai"><span class="stitch-dot"></span>Tidy with AI
+            <span class="stitch-note mono" id="ai-progress"></span></li>
+          <li class="stitch" data-stage="build"><span class="stitch-dot"></span>Typeset &amp; build EPUB</li>
+          <li class="stitch" data-stage="validate"><span class="stitch-dot"></span>Validate</li>
+        </ol>
+      </section>
+
+      <!-- № 3½ · AI review -->
+      <section id="panel-review" class="panel" hidden>
+        <p class="eyebrow mono">№ 3 · Proofread</p>
+        <h1 class="paneltitle">Review the tidy-up</h1>
+        <p class="paneldek">Same words, new structure. Skim both sides — if anything changed
+          meaning, keep the original.</p>
+        <div class="proofs">
+          <div class="proofpane">
+            <p class="prooflabel mono">Original</p>
+            <pre id="proof-original"></pre>
+          </div>
+          <div class="proofpane">
+            <p class="prooflabel mono">Tidied</p>
+            <pre id="proof-formatted"></pre>
+          </div>
+        </div>
+        <div class="actionrow">
+          <button id="use-formatted" class="btn btn-primary" type="button">Bind the tidied text</button>
+          <button id="keep-original" class="btn btn-ghost" type="button">Keep the original</button>
+        </div>
+      </section>
+
+      <!-- № 4 · done -->
+      <section id="panel-done" class="panel" hidden>
+        <p class="eyebrow mono">№ 4 · Off the press</p>
+        <h1 class="paneltitle" id="done-title"></h1>
+        <div class="resultrow">
+          <div class="minicover" aria-hidden="true">
+            <p class="minicover-title" id="cover-title"></p>
+            <span class="minicover-rule"></span>
+            <p class="minicover-author" id="cover-author"></p>
+          </div>
+          <div class="resultmeta">
+            <a id="download-btn" class="btn btn-primary btn-big" download>Download EPUB
+              <span class="mono" id="download-size"></span></a>
+            <button id="send-kindle" class="btn btn-ghost" type="button" hidden>Send to Kindle</button>
+            <div id="validation" class="validation"></div>
+            <p class="sendnote" id="sendnote">Send it to your Kindle by USB, or email it to your
+              Send-to-Kindle address — set that up in Settings to get a one-click send button.</p>
+            <button id="start-over" class="ghostlink" type="button">Bind another document</button>
+          </div>
+        </div>
+        <div class="proofblock">
+          <p class="prooflabel mono">Proof — first chapter as it will read</p>
+          <iframe id="proof-frame" title="First chapter preview"></iframe>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="colophon mono">
+    Bound entirely on this machine — files and keys never leave it, except the AI tidy-up you
+    start yourself.&ensp;·&ensp;Set in Besley, Albert Sans &amp; Plex Mono.
+  </footer>
+</div>
+
+<!-- settings drawer -->
+<div id="scrim" class="scrim" hidden></div>
+<aside id="settings" class="drawer" hidden aria-label="Settings">
+  <div class="drawer-head">
+    <h2 class="drawer-title">API keys</h2>
+    <button id="settings-close" class="iconbtn" type="button" aria-label="Close settings">×</button>
+  </div>
+  <p class="drawer-note">Keys are encrypted on disk (<span class="mono">storage/.keys</span>,
+    master key in <span class="mono">~/.bindery</span>) and are sent only to their own provider
+    when you run a tidy-up. They never appear in logs or leave this machine otherwise.</p>
+  <div id="key-list"></div>
+
+  <h2 class="drawer-title drawer-title-sub">Send to Kindle</h2>
+  <p class="drawer-note">Emails each bound EPUB to your Send-to-Kindle address. For Gmail,
+    create an <a href="https://myaccount.google.com/apppasswords" target="_blank"
+    rel="noopener">app password</a>, and add your email to Amazon's
+    <a href="https://www.amazon.com/sendtokindle/email" target="_blank" rel="noopener">approved
+    senders</a> list.</p>
+  <div class="kindleform">
+    <label class="field"><span class="fieldlabel">Your email</span>
+      <input id="k-user" type="text" placeholder="you@gmail.com" autocomplete="off" spellcheck="false"></label>
+    <label class="field"><span class="fieldlabel">App password</span>
+      <input id="k-pass" type="password" placeholder="paste app password…" autocomplete="off"></label>
+    <label class="field"><span class="fieldlabel">Kindle address</span>
+      <input id="k-to" type="text" placeholder="yourname@kindle.com" autocomplete="off" spellcheck="false"></label>
+    <label class="field"><span class="fieldlabel">SMTP server</span>
+      <input id="k-host" type="text" placeholder="smtp.gmail.com:465 (default)" autocomplete="off" spellcheck="false"></label>
+    <div class="actionrow">
+      <button id="k-save" class="btn btn-primary btn-small" type="button">Save</button>
+      <span id="k-status" class="mono keyblock-status"></span>
+    </div>
+  </div>
+</aside>
+
+<div id="toast" class="toast mono" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
