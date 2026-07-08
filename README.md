@@ -1,9 +1,26 @@
 # Bindery
 
 A local web app that turns text documents — **PDF, DOCX, TXT, Markdown, HTML** — into
-clean, Kindle-friendly **EPUB3** books. Built for converting school notes into something
-pleasant to read on e-ink. Everything runs on your machine; nothing is uploaded anywhere,
-except the optional AI tidy-up you trigger yourself with your own API key.
+clean, Kindle-friendly **EPUB3** books, and sends them straight to your Kindle. Built for
+converting school notes into something pleasant to read on e-ink. Everything runs on
+your machine; nothing is uploaded anywhere, except the optional AI tidy-up you trigger
+yourself with your own API key.
+
+## Features
+
+- **Five input formats** (PDF, DOCX, TXT, Markdown, HTML) normalized into one clean
+  EPUB3, with automatic OCR for scanned PDFs.
+- **Optional AI tidy-up** (Anthropic / OpenAI / Google, your own key) that only fixes
+  structure — never rewords — with a side-by-side review before anything is built.
+- **One-click Send to Kindle** by email once it's built.
+- **Local-first**: no accounts, no server-side storage, no telemetry. Your files and
+  API keys never leave your machine unless you explicitly send a tidy-up request or an
+  email.
+
+## Stack
+
+Python, FastAPI, vanilla HTML/CSS/JS (no build step). PDF via PyMuPDF, EPUB via
+ebooklib, cover art via Pillow, OCR via Windows' built-in engine (`winocr`).
 
 ## Run it
 
@@ -80,3 +97,13 @@ Kindle app, or copy it over USB.
   then English.
 - `python test_pipeline.py` runs an end-to-end self-check of all five converters and
   the EPUB builder.
+
+## Status
+
+Personal project, built for my own use converting study material for e-ink reading.
+Works well for its intended formats; not battle-tested against every possible malformed
+PDF or DOCX out there.
+
+## License
+
+[MIT](LICENSE) — use it however you like, just keep the attribution.
