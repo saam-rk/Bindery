@@ -158,10 +158,48 @@ def build_epub(doc: Document, out_path: Path, text_align: str = "justify",
     epub.write_epub(str(out_path), book)
 
 
-# ---------------------------------------------------------- validation
+# --------------------------------------------------------- metadata edit
 
 _NS = {"c": "urn:oasis:names:tc:opendocument:xmlns:container",
        "opf": "http://www.idpf.org/2007/opf"}
+_DC = "{http://purl.org/dc/elements/1.1/}"
+
+
+def set_epub_metadata(path: Path, title: str = "", author: str = "") -> None:
+    """Rewrite dc:title/dc:creator in an existing EPUB's OPF — for epubs that
+    arrive pre-built (direct Send-to-Kindle) rather than through build_epub()."""
+    if not title and not author:
+        return
+    with zipfile.ZipFile(path) as z:
+        names = z.namelist()
+        entries = {n: z.read(n) for n in names}
+
+    container = ET.fromstring(entries["META-INF/container.xml"])
+    opf_path = container.find(".//c:rootfile", _NS).get("full-path")
+    opf = ET.fromstring(entries[opf_path])
+    metadata_el = opf.find(f"{{{_NS['opf']}}}metadata")
+
+    def _set(tag: str, value: str) -> None:
+        el = metadata_el.find(f"{_DC}{tag}")
+        if el is None:
+            el = ET.SubElement(metadata_el, f"{_DC}{tag}")
+        el.text = value
+
+    ET.register_namespace("dc", "http://purl.org/dc/elements/1.1/")
+    ET.register_namespace("opf", "http://www.idpf.org/2007/opf")
+    if title:
+        _set("title", title)
+    if author:
+        _set("creator", author)
+    entries[opf_path] = ET.tostring(opf, encoding="utf-8", xml_declaration=True)
+
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(zipfile.ZipInfo("mimetype"), entries.pop("mimetype"), zipfile.ZIP_STORED)
+        for name, content in entries.items():
+            z.writestr(name, content)
+
+
+# ---------------------------------------------------------- validation
 
 
 def validate_epub(path: Path) -> dict:

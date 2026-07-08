@@ -110,6 +110,12 @@ function fmtSize(bytes) {
 const dropwell = $("#dropwell");
 const fileInput = $("#file-input");
 const OK_EXT = /\.(pdf|docx|txt|md|markdown|html?)$/i;
+const EPUB_EXT = /\.epub$/i;
+
+function handleDroppedFile(file) {
+  if (EPUB_EXT.test(file.name)) openEpubSend(file);
+  else uploadFile(file);
+}
 
 // files can be dropped anywhere on the page, not just on the well
 const draggingFiles = (e) => e.dataTransfer?.types?.includes("Files");
@@ -128,10 +134,57 @@ document.addEventListener("drop", (e) => {
   dragDepth = 0;
   dropwell.classList.remove("dragover");
   const file = e.dataTransfer?.files?.[0];
-  if (file && !$("#panel-upload").hidden) uploadFile(file);
+  if (file && !$("#panel-upload").hidden) handleDroppedFile(file);
 });
 fileInput.addEventListener("change", () => {
-  if (fileInput.files[0]) uploadFile(fileInput.files[0]);
+  if (fileInput.files[0]) handleDroppedFile(fileInput.files[0]);
+});
+
+/* ------------------------------------------------------- direct epub send */
+
+const epubWell = $("#epub-well");
+let pendingEpub = null;
+
+function openEpubSend(file) {
+  pendingEpub = file;
+  $("#epub-name").textContent = `${file.name} · ${fmtSize(file.size)}`;
+  $("#epub-title").value = file.name.replace(/\.epub$/i, "").replace(/[-_]+/g, " ").trim();
+  $("#epub-author").value = "";
+  epubWell.hidden = false;
+  epubWell.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+$("#epub-cancel").addEventListener("click", () => {
+  pendingEpub = null;
+  epubWell.hidden = true;
+  fileInput.value = "";
+});
+
+$("#epub-send-btn").addEventListener("click", async () => {
+  if (!pendingEpub) return;
+  if (!state.kindle.configured) {
+    showError("Send to Kindle isn't set up yet — add your email details in Settings first.");
+    return;
+  }
+  const btn = $("#epub-send-btn");
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+  try {
+    const form = new FormData();
+    form.append("file", pendingEpub);
+    form.append("title", $("#epub-title").value.trim());
+    form.append("author", $("#epub-author").value.trim());
+    await api("/api/send-epub", { method: "POST", body: form });
+    toast("Sent — it'll show up on your Kindle in a minute or two");
+    epubWell.hidden = true;
+    pendingEpub = null;
+    fileInput.value = "";
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Send to Kindle";
+  }
 });
 
 async function uploadFile(file) {
@@ -336,7 +389,8 @@ function fillDone(data) {
   $("#download-btn").href = `/api/download/${data.epub_id}`;
   $("#download-size").textContent = fmtSize(data.size);
   state.epubId = data.epub_id;
-  $("#send-kindle").hidden = !state.kindle.configured;
+  $("#kindle-title").value = title;
+  $("#kindlerow").hidden = !state.kindle.configured;
   $("#sendnote").hidden = state.kindle.configured;
 
   const v = data.validation;
@@ -359,7 +413,11 @@ sendBtn.addEventListener("click", async () => {
   sendBtn.disabled = true;
   sendBtn.textContent = "Sending…";
   try {
-    await api(`/api/send/${state.epubId}`, { method: "POST" });
+    await api(`/api/send/${state.epubId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: $("#kindle-title").value.trim() }),
+    });
     toast("Sent — it'll show up on your Kindle in a minute or two");
   } catch (err) {
     showError(err.message);

@@ -217,6 +217,7 @@ html[data-theme="light"] .icon-sun { display: none; }
   display: grid; grid-template-columns: 1fr 1fr 110px; gap: 16px 18px;
   margin-bottom: 26px;
 }
+.formgrid-2 { grid-template-columns: 1fr 1fr; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field-wide { grid-column: 1 / -1; }
 .fieldlabel {
@@ -405,6 +406,8 @@ input[type="text"]:focus, input[type="password"]:focus, select:focus, textarea:f
 .minicover-author { margin: 0; font-size: 11px; color: #6F6353; }
 
 .resultmeta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; align-items: flex-start; }
+.kindlerow { display: flex; gap: 10px; align-items: center; }
+.kindlerow input[type="text"] { width: 200px; }
 .validation { font-size: 13.5px; }
 .validation .vline { margin: 3px 0; display: flex; gap: 8px; align-items: baseline; }
 .validation .v-ok { color: var(--ok); }

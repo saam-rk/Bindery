@@ -7,13 +7,13 @@ import uuid
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, Request, UploadFile
+from fastapi import FastAPI, Form, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend import ai_formatter, converters, key_manager, kindle_mail
-from backend.epub_builder import build_epub, eink_css, validate_epub
+from backend.epub_builder import build_epub, eink_css, set_epub_metadata, validate_epub
 from backend.models import ConversionError, Document
 
 ROOT = Path(__file__).resolve().parent
@@ -213,12 +213,40 @@ def kindle_delete():
     return _kindle_status()
 
 
+class SendRequest(BaseModel):
+    title: str = ""
+
+
 @app.post("/api/send/{epub_id}")
-def send_to_kindle(epub_id: str):
+def send_to_kindle(epub_id: str, req: SendRequest = SendRequest()):
     path = EPUBS.get(epub_id)
     if not path or not path.exists():
         raise ConversionError("That EPUB is no longer available — build it again.")
-    kindle_mail.send(path, key_manager.get_config("kindle"))
+    kindle_mail.send(path, key_manager.get_config("kindle"), req.title)
+    return {"sent": True}
+
+
+@app.post("/api/send-epub")
+async def send_epub_direct(file: UploadFile, title: str = Form(""), author: str = Form("")):
+    data = await file.read()
+    if len(data) > MAX_UPLOAD:
+        raise ConversionError("File is larger than 80 MB — that's beyond this tool's scope.")
+    if not data:
+        raise ConversionError("The uploaded file is empty.")
+    name = Path(file.filename or "book.epub").name
+    if not name.lower().endswith(".epub"):
+        raise ConversionError("That's not an .epub file.")
+    tmp = UPLOADS / f"{uuid.uuid4().hex}.epub"
+    tmp.write_bytes(data)
+    clean_title = title.strip() or Path(name).stem
+    try:
+        try:
+            set_epub_metadata(tmp, clean_title, author.strip())
+        except Exception:
+            log.warning("could not rewrite metadata for %s; sending as-is", name)
+        kindle_mail.send(tmp, key_manager.get_config("kindle"), clean_title)
+    finally:
+        tmp.unlink(missing_ok=True)
     return {"sent": True}
 
 

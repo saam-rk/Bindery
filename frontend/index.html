@@ -43,7 +43,7 @@
         <h1 class="paneltitle">Choose a document</h1>
         <label class="dropwell" id="dropwell">
           <svg class="dropwell-thread" aria-hidden="true" preserveAspectRatio="none"><rect x="1.5" y="1.5" rx="14"/></svg>
-          <input type="file" id="file-input" accept=".pdf,.docx,.txt,.md,.markdown,.html,.htm">
+          <input type="file" id="file-input" accept=".pdf,.docx,.txt,.md,.markdown,.html,.htm,.epub">
           <div class="dropwell-idle">
             <svg class="dropwell-glyph" width="44" height="44" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M24 10c-4-3-10-3-14-1v28c4-2 10-2 14 1 4-3 10-3 14-1V9c-4-2-10-2-14 1z"/>
@@ -64,6 +64,27 @@
             placeholder="# My course&#10;&#10;Paste the Markdown here and press Use this text."></textarea>
           <div class="actionrow">
             <button id="md-paste-btn" class="btn btn-primary" type="button" disabled>Use this text</button>
+          </div>
+        </div>
+
+        <div class="pastewell" id="epub-well" hidden>
+          <p class="mono pastewell-hint">Already an EPUB? Skip the bindery — send it straight to your Kindle.</p>
+          <div class="filechip">
+            <span class="mono" id="epub-name"></span>
+            <button id="epub-cancel" class="ghostlink" type="button">cancel</button>
+          </div>
+          <div class="formgrid formgrid-2">
+            <label class="field">
+              <span class="fieldlabel">Title on Kindle</span>
+              <input id="epub-title" type="text" autocomplete="off">
+            </label>
+            <label class="field">
+              <span class="fieldlabel">Author</span>
+              <input id="epub-author" type="text" autocomplete="off" placeholder="optional — keeps existing if blank">
+            </label>
+          </div>
+          <div class="actionrow">
+            <button id="epub-send-btn" class="btn btn-primary" type="button">Send to Kindle</button>
           </div>
         </div>
       </section>
@@ -189,7 +210,10 @@
           <div class="resultmeta">
             <a id="download-btn" class="btn btn-primary btn-big" download>Download EPUB
               <span class="mono" id="download-size"></span></a>
-            <button id="send-kindle" class="btn btn-ghost" type="button" hidden>Send to Kindle</button>
+            <div class="kindlerow" id="kindlerow" hidden>
+              <input id="kindle-title" type="text" autocomplete="off" aria-label="Title on Kindle">
+              <button id="send-kindle" class="btn btn-ghost" type="button">Send to Kindle</button>
+            </div>
             <div id="validation" class="validation"></div>
             <p class="sendnote" id="sendnote">Send it to your Kindle by USB, or email it to your
               Send-to-Kindle address — set that up in Settings to get a one-click send button.</p>

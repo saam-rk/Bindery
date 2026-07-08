@@ -3,6 +3,7 @@
 The sender address must be on Amazon's approved list:
 https://www.amazon.com/sendtokindle/email → Preferences → Approved Personal Document E-mail List.
 """
+import re
 import smtplib
 import ssl
 from email.message import EmailMessage
@@ -15,7 +16,11 @@ def configured(cfg: dict) -> bool:
     return bool(cfg.get("smtp_user") and cfg.get("smtp_pass") and cfg.get("kindle_email"))
 
 
-def send(epub: Path, cfg: dict) -> None:
+def _safe_name(name: str) -> str:
+    return re.sub(r'[\\/:*?"<>|]', "", name).strip()
+
+
+def send(epub: Path, cfg: dict, title: str = "") -> None:
     if not configured(cfg):
         raise ConversionError(
             "Send to Kindle isn't set up — add your email details in Settings first.")
@@ -24,11 +29,12 @@ def send(epub: Path, cfg: dict) -> None:
     host = host or "smtp.gmail.com"
     port = int(port_s) if port_s.isdigit() else 465
 
+    name = _safe_name(title) or epub.stem
     msg = EmailMessage()
-    msg["From"], msg["To"], msg["Subject"] = user, cfg["kindle_email"].strip(), epub.stem
+    msg["From"], msg["To"], msg["Subject"] = user, cfg["kindle_email"].strip(), name
     msg.set_content("Sent by Bindery.")
     msg.add_attachment(epub.read_bytes(), maintype="application",
-                       subtype="epub+zip", filename=epub.name)
+                       subtype="epub+zip", filename=f"{name}.epub")
     try:
         # ponytail: 465 = implicit TLS, anything else = STARTTLS; covers Gmail/Outlook/etc.
         cls = smtplib.SMTP_SSL if port == 465 else smtplib.SMTP
