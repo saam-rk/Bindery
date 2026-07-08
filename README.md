@@ -1,5 +1,7 @@
 # Bindery
 
+![Bindery demo](docs/demo.gif)
+
 A local web app that turns text documents — **PDF, DOCX, TXT, Markdown, HTML** — into
 clean, Kindle-friendly **EPUB3** books, and sends them straight to your Kindle. Built for
 converting school notes into something pleasant to read on e-ink. Everything runs on
