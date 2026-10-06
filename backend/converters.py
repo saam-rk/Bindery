@@ -3,6 +3,7 @@ import hashlib
 import html as html_mod
 import re
 from pathlib import Path
+from typing import cast
 
 import docx
 import fitz  # PyMuPDF
@@ -33,6 +34,13 @@ def convert(path: Path, original_name: str) -> Document:
             f"Could not read “{original_name}” — the file may be corrupted, "
             "empty, or password-protected.") from exc
     doc.title = (doc.title or stem or "Untitled").strip()
+    for chapter in doc.chapters:
+        if "<img" in chapter.html:
+            soup = BeautifulSoup(chapter.html, "html.parser")
+            for image in soup.find_all("img"):
+                if str(image.get("src", "")) not in chapter.images:
+                    image.decompose()
+            chapter.html = sanitize(str(soup))
     doc.chapters = [c for c in doc.chapters if c.html.strip() or c.images]
     if not doc.chapters:
         raise ConversionError(
@@ -72,7 +80,7 @@ def split_chapters(raw_html: str, default_title: str) -> tuple[str | None, list[
     level = next((f"h{i}" for i in (1, 2, 3) if soup.find(f"h{i}")), None)
     if level is None:
         body = str(soup).strip()
-        return doc_title, [Chapter(doc_title or default_title, body)] if body else (doc_title, [])
+        return doc_title, ([Chapter(doc_title or default_title, body)] if body else [])
 
     chapters: list[Chapter] = []
     title, buf = None, []
@@ -317,17 +325,20 @@ def _ocr_paragraphs(text: str) -> list[str]:
 
 def _pdf(path: Path, stem: str) -> Document:
     # read everything up front and close the handle, so Windows can delete the temp file
-    with fitz.open(str(path)) as pdf:
+    # Opening from bytes also avoids a leaked OS handle if MuPDF rejects a
+    # malformed PDF before the context manager is entered (notably on Windows).
+    with fitz.open(stream=path.read_bytes(), filetype="pdf") as pdf:
         if pdf.needs_pass:
             raise ConversionError("This PDF is password-protected. Remove the password and try again.")
-        pages = [p.get_text("dict") for p in pdf]
+        pages = [cast(dict, pdf.load_page(i).get_text("dict")) for i in range(len(pdf))]
         meta = pdf.metadata or {}
         # pages with no selectable text (scans) fall back to Windows' built-in OCR
         ocr_paras: dict[int, list[str]] = {}
         if ocr.available():
-            for i, page in enumerate(pdf):
+            for i in range(len(pdf)):
                 if _page_has_text(pages[i]):
                     continue
+                page = pdf.load_page(i)
                 pix = page.get_pixmap(matrix=fitz.Matrix(3, 3), colorspace=fitz.csRGB)
                 ocr_paras[i] = _ocr_paragraphs(ocr.page_text(pix))
 
@@ -347,7 +358,7 @@ def _pdf(path: Path, stem: str) -> Document:
                if ocr.available() else
                "OCR support isn't installed — run “pip install winocr” in Bindery's "
                "environment and try again."))
-    body_size = max(weights, key=weights.get) if weights else 0
+    body_size = max(weights, key=lambda size: weights[size]) if weights else 0
 
     # sizes clearly above body text become heading levels, largest first
     heading_sizes = sorted((s for s in weights if s >= body_size * 1.15 and s > body_size + 0.9),
@@ -388,7 +399,7 @@ def _pdf(path: Path, stem: str) -> Document:
                 if min(block["bbox"][2] - block["bbox"][0],
                        block["bbox"][3] - block["bbox"][1]) < 40:
                     continue
-                h = hashlib.md5(data).hexdigest()
+                h = hashlib.sha256(data).hexdigest()
                 if h in seen_hashes:  # repeated logos / watermarks
                     continue
                 seen_hashes.add(h)

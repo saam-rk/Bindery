@@ -1,0 +1,17 @@
+Bindery
+Copyright (c) 2026 saam-rk
+
+Bindery's original application code is licensed under the GNU Affero General
+Public License, version 3 only (SPDX-License-Identifier: AGPL-3.0-only).
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See LICENSE for the full terms.
+
+Third-party dependencies and bundled fonts retain their own copyrights and
+licenses. See THIRD_PARTY_NOTICES.md and docs/licenses/ for their notices.
+The application offers its source via the "Source code" link in its footer.

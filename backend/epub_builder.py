@@ -6,13 +6,16 @@ import mimetypes
 import re
 import shutil
 import subprocess
+import tempfile
 import textwrap
 import uuid
 import zipfile
+from contextlib import suppress
 from datetime import date
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from defusedxml.ElementTree import fromstring as safe_fromstring
 from ebooklib import epub
 from PIL import Image, ImageDraw, ImageFont
 
@@ -62,14 +65,12 @@ hr {{ border: none; border-top: 1px solid #777; margin: 1.6em 20%; }}
 PAPER, INK, SIENNA = "#F6F1E7", "#231F1A", "#B4552D"
 
 
-def _cover_font(size: int) -> ImageFont.FreeTypeFont:
+def _cover_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     for f in (ROOT / "frontend" / "fonts").glob("*.ttf"):
         try:
             font = ImageFont.truetype(str(f), size)
-            try:
+            with suppress(OSError):
                 font.set_variation_by_axes([560])  # semibold-ish on variable fonts
-            except OSError:
-                pass
             return font
         except OSError:
             continue
@@ -82,12 +83,12 @@ def make_cover(title: str, author: str) -> bytes:
     d = ImageDraw.Draw(img)
 
     lines, size = [], 96
-    while size >= 48:
+    font = _cover_font(size)
+    for size in range(96, 47, -12):
         font = _cover_font(size)
         lines = textwrap.wrap(title, width=max(8, int((W - 280) / (size * 0.52))))
         if len(lines) <= 5:
             break
-        size -= 12
     line_h = size * 1.25
     y = H * 0.30 - (len(lines) * line_h) / 2
     for ln in lines:
@@ -124,6 +125,9 @@ def build_epub(doc: Document, out_path: Path, text_align: str = "justify",
     book.add_item(css)
 
     book.set_cover("cover.png", make_cover(doc.title, doc.author))
+    # EbookLib makes the cover non-linear. A navigation landmark must link to
+    # it so EPUBCheck/EPUB 3 readers consider that content reachable (OPF-096).
+    book.guide = [{"type": "cover", "title": "Cover", "href": "cover.xhtml"}]
 
     titlepage = epub.EpubHtml(uid="titlepage", title="Title Page",
                               file_name="titlepage.xhtml", lang=doc.language)
@@ -140,7 +144,7 @@ def build_epub(doc: Document, out_path: Path, text_align: str = "justify",
     for i, ch in enumerate(doc.chapters, 1):
         item = epub.EpubHtml(uid=f"ch{i}", title=ch.title or f"Section {i}",
                              file_name=f"chap_{i:03}.xhtml", lang=doc.language)
-        body = re.sub(r'src="([^"/]+)"', r'src="images/\1"', ch.html)
+        body = re.sub(r'src="([^"/]+)"', rf'src="images/{i}_\1"', ch.html)
         item.content = f'<h1 class="chapter">{html_mod.escape(ch.title)}</h1>{body}'
         item.add_item(css)
         book.add_item(item)
@@ -148,7 +152,7 @@ def build_epub(doc: Document, out_path: Path, text_align: str = "justify",
         for name, data in ch.images.items():
             mt = mimetypes.guess_type(name)[0] or "image/png"
             book.add_item(epub.EpubImage(uid=f"i{i}_{name.split('.')[0]}",
-                                         file_name=f"images/{name}",
+                                         file_name=f"images/{i}_{name}",
                                          media_type=mt, content=data))
 
     book.toc = chapters
@@ -165,19 +169,36 @@ _NS = {"c": "urn:oasis:names:tc:opendocument:xmlns:container",
 _DC = "{http://purl.org/dc/elements/1.1/}"
 
 
+def _check_archive_size(archive: zipfile.ZipFile) -> None:
+    entries = archive.infolist()
+    if len(entries) > 10000 or sum(entry.file_size for entry in entries) > 256 * 1024 * 1024:
+        raise ValueError("EPUB expands beyond this tool's 256 MB / 10,000 entry limit.")
+
+
+def _package_path(container: ET.Element) -> str:
+    rootfile = container.find(".//c:rootfile", _NS)
+    path = rootfile.get("full-path") if rootfile is not None else None
+    if not path:
+        raise ValueError("EPUB container has no package path.")
+    return path
+
+
 def set_epub_metadata(path: Path, title: str = "", author: str = "") -> None:
     """Rewrite dc:title/dc:creator in an existing EPUB's OPF — for epubs that
     arrive pre-built (direct Send-to-Kindle) rather than through build_epub()."""
     if not title and not author:
         return
     with zipfile.ZipFile(path) as z:
+        _check_archive_size(z)
         names = z.namelist()
         entries = {n: z.read(n) for n in names}
 
-    container = ET.fromstring(entries["META-INF/container.xml"])
-    opf_path = container.find(".//c:rootfile", _NS).get("full-path")
-    opf = ET.fromstring(entries[opf_path])
+    container = safe_fromstring(entries["META-INF/container.xml"], forbid_dtd=True)
+    opf_path = _package_path(container)
+    opf = safe_fromstring(entries[opf_path], forbid_dtd=True)
     metadata_el = opf.find(f"{{{_NS['opf']}}}metadata")
+    if metadata_el is None:
+        raise ValueError("EPUB package has no metadata element.")
 
     def _set(tag: str, value: str) -> None:
         el = metadata_el.find(f"{_DC}{tag}")
@@ -207,26 +228,37 @@ def validate_epub(path: Path) -> dict:
     errors, warnings, info = [], [], []
     try:
         with zipfile.ZipFile(path) as z:
+            _check_archive_size(z)
             names = z.namelist()
+            if len(names) != len(set(names)):
+                errors.append("Archive contains duplicate filenames.")
+            if z.read("mimetype") != b"application/epub+zip":
+                errors.append("Invalid EPUB mimetype content.")
             first = z.infolist()[0]
             if first.filename != "mimetype":
                 errors.append("mimetype is not the first entry in the archive.")
             elif first.compress_type != zipfile.ZIP_STORED:
                 errors.append("mimetype entry is compressed (must be stored).")
-            container = ET.fromstring(z.read("META-INF/container.xml"))
-            opf_path = container.find(".//c:rootfile", _NS).get("full-path")
+            container = safe_fromstring(z.read("META-INF/container.xml"), forbid_dtd=True)
+            opf_path = _package_path(container)
             opf_dir = str(Path(opf_path).parent)
-            opf = ET.fromstring(z.read(opf_path))
+            opf = safe_fromstring(z.read(opf_path), forbid_dtd=True)
 
             manifest = {it.get("id"): it for it in opf.iter(f"{{{_NS['opf']}}}item")}
             for it in manifest.values():
-                href = str(Path(opf_dir) / it.get("href")).replace("\\", "/")
+                item_href = it.get("href")
+                if not item_href:
+                    errors.append("Manifest item has no href.")
+                    continue
+                href = str(Path(opf_dir) / item_href).replace("\\", "/")
                 href = href.removeprefix("./")
                 if href not in names:
                     errors.append(f"Manifest references missing file: {it.get('href')}")
                 elif it.get("media-type") == "application/xhtml+xml":
                     try:
-                        ET.fromstring(z.read(href))
+                        # EPUB XHTML may contain <!DOCTYPE html>. DefusedXML
+                        # still forbids entities and external-resource resolution.
+                        safe_fromstring(z.read(href), forbid_entities=True, forbid_external=True)
                     except ET.ParseError as e:
                         errors.append(f"{it.get('href')} is not well-formed XHTML ({e}).")
 
@@ -236,7 +268,7 @@ def validate_epub(path: Path) -> dict:
             for idref in spine:
                 if idref not in manifest:
                     errors.append(f"Spine references unknown item: {idref}")
-            if not any(it.get("properties") == "nav" for it in manifest.values()):
+            if not any("nav" in (it.get("properties") or "").split() for it in manifest.values()):
                 errors.append("No nav document (table of contents) found.")
             info.append(f"{len(spine)} spine items, {len(manifest)} manifest items — structure OK."
                         if not errors else "Structural problems detected.")
@@ -247,9 +279,15 @@ def validate_epub(path: Path) -> dict:
     jar = ROOT / "vendor" / "epubcheck.jar"
     if jar.exists() and shutil.which("java"):
         try:
-            r = subprocess.run(["java", "-jar", str(jar), str(path), "--json", "-"],
-                               capture_output=True, text=True, timeout=90)
-            data = json.loads(r.stdout or "{}")
+            # EPUBCheck's --json argument is a filename, not guaranteed stdout.
+            # An explicit temporary report also avoids interpreting a CLI failure
+            # with empty stdout as a successful validation.
+            with tempfile.TemporaryDirectory(prefix="bindery-epubcheck-") as tmp:
+                report_path = Path(tmp) / "report.json"
+                r = subprocess.run(["java", "-jar", str(jar), str(path),
+                                    "--json", str(report_path)],
+                                   capture_output=True, text=True, timeout=90)
+                data = json.loads(report_path.read_text(encoding="utf-8"))
             for msg in data.get("messages", []):
                 sev, text = msg.get("severity", ""), msg.get("message", "")
                 if sev in ("ERROR", "FATAL"):
@@ -257,6 +295,8 @@ def validate_epub(path: Path) -> dict:
                 elif sev == "WARNING":
                     warnings.append(f"epubcheck: {text}")
             epubcheck_used = True
+            if r.returncode != 0 and not any(m.startswith("epubcheck") for m in errors):
+                errors.append(f"epubcheck exited unsuccessfully (code {r.returncode}).")
             if not any(m.startswith("epubcheck") for m in errors + warnings):
                 info.append("epubcheck passed with no issues.")
         except Exception:

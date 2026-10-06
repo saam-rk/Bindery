@@ -3,3 +3,13 @@ __pycache__/
 storage/
 vendor/
 *.pyc
+
+# Local credentials and machine-specific launcher (not part of the public app).
+.env
+.env.*
+!.env.example
+!.env.sample
+*.key
+*.enc
+*.pem
+/start.ps1

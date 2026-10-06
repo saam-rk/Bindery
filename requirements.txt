@@ -1,12 +1,16 @@
-fastapi
-uvicorn
-python-multipart
-PyMuPDF
-python-docx
-markdown
-beautifulsoup4
-ebooklib
-cryptography
-httpx
-Pillow
-winocr; sys_platform == "win32"
+# Direct runtime dependencies, pinned to the validated local environment.
+# constraints.txt also pins their transitive dependencies.
+-c constraints.txt
+fastapi==0.139.0
+uvicorn==0.50.2
+python-multipart==0.0.32
+PyMuPDF==1.28.0
+python-docx==1.2.0
+markdown==3.10.2
+beautifulsoup4==4.15.0
+ebooklib==0.20
+cryptography==50.0.0
+httpx==0.28.1
+Pillow==12.3.0
+defusedxml==0.7.1
+winocr==0.0.15; sys_platform == "win32"

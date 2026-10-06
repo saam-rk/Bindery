@@ -139,9 +139,11 @@
               <span class="switch-label">Tidy up with AI first</span>
             </label>
           </div>
-          <p class="aicard-note">Rebuilds broken paragraphs and headings without changing your
-            words — useful for messy PDF extractions. Runs only when you start it, with your own
-            API key, and you review the result before anything is bound.</p>
+          <p class="aicard-note">Tries to repair broken paragraphs and headings while preserving
+            your words. Optional: when you start it, the extracted document text is sent to
+            Google, Anthropic or OpenAI (whichever you select), using your own API key.
+            Avoid private or confidential documents unless you accept that provider's data
+            policies. AI can make mistakes — review the result before binding.</p>
           <div class="aicard-config" id="ai-config" hidden>
             <div class="segmented" role="radiogroup" aria-label="AI provider">
               <button type="button" class="seg selected" data-group="provider" data-value="google">Gemini</button>
@@ -215,22 +217,29 @@
               <button id="send-kindle" class="btn btn-ghost" type="button">Send to Kindle</button>
             </div>
             <div id="validation" class="validation"></div>
-            <p class="sendnote" id="sendnote">Send it to your Kindle by USB, or email it to your
-              Send-to-Kindle address — set that up in Settings to get a one-click send button.</p>
+            <p class="sendnote" id="sendnote">Use Amazon's Send to Kindle app/site, or email it to
+              your Send-to-Kindle address — set that up in Settings for one-click sending.
+              Kindle converts EPUB; copying the EPUB over USB is not enough.</p>
             <button id="start-over" class="ghostlink" type="button">Bind another document</button>
           </div>
         </div>
         <div class="proofblock">
           <p class="prooflabel mono">Proof — first chapter as it will read</p>
-          <iframe id="proof-frame" title="First chapter preview"></iframe>
+          <iframe id="proof-frame" title="First chapter preview" sandbox="" referrerpolicy="no-referrer"></iframe>
         </div>
       </section>
     </main>
   </div>
 
   <footer class="colophon mono">
-    Bound entirely on this machine — files and keys never leave it, except the AI tidy-up you
-    start yourself.&ensp;·&ensp;Set in Besley, Albert Sans &amp; Plex Mono.
+    Local conversion. Optional AI sends text to your chosen provider; Send to Kindle sends
+    the EPUB through your email provider and Amazon.&ensp;·&ensp;Set in Besley, Albert Sans &amp; Plex Mono.
+    <br>Copyright © 2026 saam-rk.&ensp;·&ensp;
+    <a href="https://github.com/saam-rk/Bindery/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0-only</a>
+    — no warranty.&ensp;·&ensp;
+    <a href="https://github.com/saam-rk/Bindery" target="_blank" rel="noopener">Source code</a>
+    &ensp;·&ensp;
+    <a href="https://github.com/saam-rk/Bindery/blob/main/THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener">Third-party notices</a>
   </footer>
 </div>
 

@@ -1,9 +1,12 @@
 """Bindery — local document → Kindle-EPUB converter. Run: python app.py"""
+import base64
 import html as html_mod
 import json
 import logging
+import mimetypes
 import re
 import uuid
+from contextlib import suppress
 from pathlib import Path
 
 import uvicorn
@@ -11,6 +14,7 @@ from fastapi import FastAPI, Form, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from backend import ai_formatter, converters, key_manager, kindle_mail
 from backend.epub_builder import build_epub, eink_css, set_epub_metadata, validate_epub
@@ -25,6 +29,23 @@ for d in (UPLOADS, OUTPUT):
 MAX_UPLOAD = 80 * 1024 * 1024
 log = logging.getLogger("bindery")
 app = FastAPI(title="Bindery")
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
+
+
+@app.middleware("http")
+async def local_api_only(request: Request, call_next):
+    """Reject cross-site browser API calls and DNS-rebinding hostnames.
+
+    This is not authentication: Bindery must still remain a localhost tool.
+    Non-browser local clients without Origin headers continue to work.
+    """
+    if request.url.path.startswith("/api/"):
+        origin = request.headers.get("origin")
+        expected = f"{request.url.scheme}://{request.headers.get('host', '')}"
+        if ((origin and origin != expected)
+                or request.headers.get("sec-fetch-site") == "cross-site"):
+            return JSONResponse(status_code=403, content={"error": "Cross-site API requests are not allowed."})
+    return await call_next(request)
 
 # ponytail: in-memory stores, fine for a single-user localhost tool
 DOCS: dict[str, dict] = {}   # doc_id -> {"original": Document, "formatted": Document|None}
@@ -63,10 +84,9 @@ async def extract(file: UploadFile):
     try:
         doc = converters.convert(tmp, name)
     finally:
-        try:
+        # A stray temporary file must never mask the original conversion error.
+        with suppress(OSError):
             tmp.unlink(missing_ok=True)
-        except OSError:
-            pass  # a stray temp file must never mask the real error; storage/ is disposable
     doc_id = uuid.uuid4().hex
     DOCS[doc_id] = {"original": doc, "formatted": None}
     return {"doc_id": doc_id, **_doc_summary(doc)}
@@ -150,13 +170,27 @@ def build(req: BuildRequest):
     EPUBS[epub_id] = out_path
 
     first = doc.chapters[0]
+
+    def preview_image(match: re.Match) -> str:
+        name = match.group(1)
+        data = first.images.get(name)
+        if data is None:
+            return 'src=""'
+        media_type = mimetypes.guess_type(name)[0] or "image/png"
+        encoded = base64.b64encode(data).decode("ascii")
+        return f'src="data:{media_type};base64,{encoded}"'
+
+    preview_body = re.sub(r'src="([^"]+)"', preview_image, first.html)
     preview = (
-        "<!doctype html><html><head><meta charset='utf-8'><style>"
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        '<meta http-equiv="Content-Security-Policy" '
+        'content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'">'
+        "<style>"
         + eink_css(align, pstyle)
         + "body{max-width:34em;margin:0 auto;padding:2.5em 1.5em;"
           "background:#FDFBF7;color:#1a1a1a;font-size:17px;}"
         + "</style></head><body>"
-        + f"<h1 class='chapter'>{html_mod.escape(first.title)}</h1>{first.html}"
+        + f"<h1 class='chapter'>{html_mod.escape(first.title)}</h1>{preview_body}"
         + "</body></html>")
 
     return {"epub_id": epub_id, "filename": out_path.name,
@@ -240,10 +274,13 @@ async def send_epub_direct(file: UploadFile, title: str = Form(""), author: str 
     tmp.write_bytes(data)
     clean_title = title.strip() or Path(name).stem
     try:
+        validation = validate_epub(tmp)
+        if not validation["ok"]:
+            raise ConversionError("This EPUB is invalid: " + "; ".join(validation["errors"]))
         try:
             set_epub_metadata(tmp, clean_title, author.strip())
-        except Exception:
-            log.warning("could not rewrite metadata for %s; sending as-is", name)
+        except Exception as exc:
+            raise ConversionError("Could not update this EPUB's metadata; it was not sent.") from exc
         kindle_mail.send(tmp, key_manager.get_config("kindle"), clean_title)
     finally:
         tmp.unlink(missing_ok=True)

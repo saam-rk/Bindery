@@ -3,9 +3,11 @@
 Every converter emits a Document; the EPUB builder and AI formatter only
 ever consume Documents, keeping them format-agnostic.
 """
+import re
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 
 class ConversionError(Exception):
@@ -41,6 +43,22 @@ def sanitize(html: str) -> str:
         else:
             allowed = ALLOWED_ATTRS.get(tag.name, set())
             tag.attrs = {k: v for k, v in tag.attrs.items() if k in allowed}
+            if tag.name == "a" and "href" in tag.attrs:
+                href = str(tag.attrs["href"]).strip()
+                # No script/data/file URLs or control-character scheme obfuscation.
+                try:
+                    scheme = urlsplit(href).scheme.lower()
+                except ValueError:
+                    scheme = "invalid"
+                if (re.search(r"[\x00-\x20\x7f]", href)
+                        or not (href.startswith("#") or scheme in {"http", "https", "mailto"})):
+                    del tag.attrs["href"]
+            elif tag.name == "img":
+                # Only converter-produced image filenames; remote URLs can track users
+                # merely by opening a preview or an EPUB. Do not keep relative API paths.
+                src = str(tag.attrs.get("src", ""))
+                if not re.fullmatch(r"img[0-9]+\.(?:png|jpe?g|gif|webp|bmp)", src, re.IGNORECASE):
+                    tag.decompose()
     # drop empty paragraphs left over from the cleanup
     for p in soup.find_all("p"):
         if not p.get_text(strip=True) and not p.find("img"):
@@ -74,8 +92,8 @@ def _chapter_markdown(ch: Chapter) -> str:
     soup = BeautifulSoup(ch.html, "html.parser")
     blocks = [f"# {ch.title}"] if ch.title else []
     for el in soup.children:
-        name = getattr(el, "name", None)
-        if name is None:
+        name = el.name if isinstance(el, Tag) else None
+        if not isinstance(el, Tag):
             if str(el).strip():
                 blocks.append(str(el).strip())
             continue

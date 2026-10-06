@@ -17,7 +17,7 @@ def configured(cfg: dict) -> bool:
 
 
 def _safe_name(name: str) -> str:
-    return re.sub(r'[\\/:*?"<>|]', "", name).strip()
+    return re.sub(r'[\\/:*?"<>|\x00-\x1f\x7f]', "", name).strip()
 
 
 def send(epub: Path, cfg: dict, title: str = "") -> None:
@@ -27,20 +27,30 @@ def send(epub: Path, cfg: dict, title: str = "") -> None:
     user = cfg["smtp_user"].strip()
     host, _, port_s = (cfg.get("smtp_host") or "").strip().partition(":")
     host = host or "smtp.gmail.com"
-    port = int(port_s) if port_s.isdigit() else 465
+    try:
+        port = int(port_s) if port_s else 465
+    except ValueError as exc:
+        raise ConversionError("SMTP port must be a number between 1 and 65535.") from exc
+    if not 1 <= port <= 65535:
+        raise ConversionError("SMTP port must be a number between 1 and 65535.")
+    recipient = cfg["kindle_email"].strip()
+    if any(re.search(r"[\x00-\x1f\x7f]", value) for value in (user, recipient, host)):
+        raise ConversionError("Email addresses and SMTP host must not contain control characters.")
 
     name = _safe_name(title) or epub.stem
     msg = EmailMessage()
-    msg["From"], msg["To"], msg["Subject"] = user, cfg["kindle_email"].strip(), name
+    msg["From"], msg["To"], msg["Subject"] = user, recipient, name
     msg.set_content("Sent by Bindery.")
     msg.add_attachment(epub.read_bytes(), maintype="application",
                        subtype="epub+zip", filename=f"{name}.epub")
     try:
         # ponytail: 465 = implicit TLS, anything else = STARTTLS; covers Gmail/Outlook/etc.
-        cls = smtplib.SMTP_SSL if port == 465 else smtplib.SMTP
-        with cls(host, port, timeout=60) as server:
+        context = ssl.create_default_context()
+        connection = (smtplib.SMTP_SSL(host, port, timeout=60, context=context)
+                      if port == 465 else smtplib.SMTP(host, port, timeout=60))
+        with connection as server:
             if port != 465:
-                server.starttls(context=ssl.create_default_context())
+                server.starttls(context=context)
             server.login(user, cfg["smtp_pass"].strip())
             server.send_message(msg)
     except smtplib.SMTPAuthenticationError:
